@@ -1,0 +1,3 @@
+[submodule "TaskHub/TaskHub/wwwroot"]
+	path = TaskHub/TaskHub/wwwroot
+	url = https://github.com/ITD333GroupB/Frontend.git
