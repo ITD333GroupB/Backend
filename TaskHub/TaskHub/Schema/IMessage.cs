@@ -5,6 +5,7 @@
         TaskComment = 0,
         WorkspaceChatMessage = 1
     }
+
     /// <summary>
     /// This interface will work for messages used to comment on tasks and to chat in workspaces. This way, a single DTO can be used in one or two indexed tables.
     /// </summary>
@@ -23,5 +24,57 @@
          */
         public MessageType Type { get; set; } // would be either a TaskComment or WorkspaceChatMessage 
         public int OwnerId { get; set; } // would be either workspace ID or a task ID, depending on the Type (NOT the user profile ID of the author)
+    }
+
+    // Task-oriented comment message
+    public sealed record TaskComment : IMessage
+    {
+        public int Id { get; set; }
+        public int OwnerId { get; set; }               // task ID (matches interface OwnerId)
+        public int TaskId { get; set; }                // explicit task ID (same value as OwnerId; kept for clarity)
+        public int AuthorUserId { get; set; }
+        public string AuthorUsername { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty; // alias for Message (frontends may prefer Content)
+        public DateTime CreatedAt { get; set; }
+        public MessageType Type { get; set; } = MessageType.TaskComment;
+
+        public TaskComment() { }
+
+        public TaskComment(int id, int ownerId, int taskId, DateTime createdAt, string content)
+        {
+            Id = id;
+            OwnerId = ownerId;
+            TaskId = taskId;
+            CreatedAt = createdAt;
+            Content = content;
+            Message = content;
+        }
+    }
+
+    // Workspace chat message
+    public sealed record WorkspaceChatMessage : IMessage
+    {
+        public int Id { get; set; }
+        public int OwnerId { get; set; }               // workspace ID (matches interface OwnerId)
+        public int WorkspaceId { get; set; }           // explicit workspace ID (same value as OwnerId; kept for clarity)
+        public int AuthorUserId { get; set; }
+        public string AuthorUsername { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty; // alias for Message
+        public DateTime CreatedAt { get; set; }
+        public MessageType Type { get; set; } = MessageType.WorkspaceChatMessage;
+
+        public WorkspaceChatMessage() { }
+
+        public WorkspaceChatMessage(int id, int ownerId, int workspaceId, DateTime createdAt, string content)
+        {
+            Id = id;
+            OwnerId = ownerId;
+            WorkspaceId = workspaceId;
+            CreatedAt = createdAt;
+            Content = content;
+            Message = content;
+        }
     }
 }

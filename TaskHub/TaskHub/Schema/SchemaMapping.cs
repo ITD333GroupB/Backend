@@ -78,16 +78,21 @@ namespace TaskHub.Schema
             { StoredProcedures.AuthenticateUser, "AuthenticateUser" }
         };
 
+        public static readonly Dictionary<ApiEndpoints, string[]> ApiEndpointQueryParameters = new Dictionary<ApiEndpoints, string[]>()
+        {
+            { ApiEndpoints.GetUserTasks, new[] { "userId" } }
+        };
+
         public static readonly Dictionary<StoredProcedures, StoredProcedureParameter[]> StoredProcedureParameters = new()
         {
-            { StoredProcedures.GetWorkspaceTasks, new[] { new StoredProcedureParameter("WorkspaceID", typeof(int)) } },
-            { StoredProcedures.GetGroupWorkspaces, new[] { new StoredProcedureParameter("GroupID", typeof(int)) } },
-            { StoredProcedures.GetUserGroups, new[] { new StoredProcedureParameter("UserID", typeof(int)) } },
-            { StoredProcedures.GetUserWorkspaces, new[] { new StoredProcedureParameter("UserID", typeof(int)) } },
-            { StoredProcedures.GetUserTasks, new[] { new StoredProcedureParameter("UserID", typeof(int)) } },
-            { StoredProcedures.GetUserWorkspaceMemberships, new[] { new StoredProcedureParameter("UserID", typeof(int)) } },
-            { StoredProcedures.GetMessagesByOwnerAndType, new[] { new StoredProcedureParameter("OwnerId", typeof(int)), new StoredProcedureParameter("Type", typeof(int)) } },
-            { StoredProcedures.GetChildTasksByTaskId, new[] { new StoredProcedureParameter("TaskId", typeof(int)) } },
+            { StoredProcedures.GetWorkspaceTasks, new[] { new StoredProcedureParameter("workspaceID", typeof(int)) } },
+            { StoredProcedures.GetGroupWorkspaces, new[] { new StoredProcedureParameter("groupID", typeof(int)) } },
+            { StoredProcedures.GetUserGroups, new[] { new StoredProcedureParameter("userID", typeof(int)) } },
+            { StoredProcedures.GetUserWorkspaces, new[] { new StoredProcedureParameter("userID", typeof(int)) } },
+            { StoredProcedures.GetUserTasks, new[] { new StoredProcedureParameter("userID", typeof(int)) } },
+            { StoredProcedures.GetUserWorkspaceMemberships, new[] { new StoredProcedureParameter("userID", typeof(int)) } },
+            { StoredProcedures.GetMessagesByOwnerAndType, new[] { new StoredProcedureParameter("ownerId", typeof(int)), new StoredProcedureParameter("type", typeof(int)) } },
+            { StoredProcedures.GetChildTasksByTaskId, new[] { new StoredProcedureParameter("taskId", typeof(int)) } },
             { StoredProcedures.RegisterUser, new[] {
                 new StoredProcedureParameter("Username", typeof(string)),
                 new StoredProcedureParameter("Password", typeof(string)),

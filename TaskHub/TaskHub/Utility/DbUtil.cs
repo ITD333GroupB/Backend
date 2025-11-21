@@ -104,7 +104,7 @@ namespace TaskHub.Utility
             return list;
         }
 
-
+        // TODO Remove this method post-refactor
         public static async Task<IReadOnlyList<Dictionary<string, object?>>> ExecuteStoredProcedureAsync(
             string storedProcedureName,
             IReadOnlyDictionary<string, object?>? parameters = null,
@@ -159,6 +159,7 @@ namespace TaskHub.Utility
             return results;
         }
 
+        // TODO Remove this method post-refactor
         public static async Task<IReadOnlyList<Dictionary<string, object?>>> ExecuteStoredProcedureAsync(SchemaMapping.StoredProcedures procEnum,
             IReadOnlyDictionary<string, object?>? parameters = null,
             CancellationToken cancellationToken = default)
@@ -181,7 +182,7 @@ namespace TaskHub.Utility
 
             return await ExecuteStoredProcedureAsync(procName, parameters, cancellationToken).ConfigureAwait(false);
         }
-
+        // TODO probably need to remove this method post-refactor
         private static object? ConvertParameter(object? value, Type targetType)
         {
             if (value is null || targetType == typeof(string) && value is string)
@@ -236,6 +237,246 @@ namespace TaskHub.Utility
             }
 
             return value;
+        }
+
+        /// <summary>
+        /// Retrieves a list of tasks associated with the specified workspace identifier.
+        /// </summary>
+        /// <param name="workspaceId">The ID of the workspace for which to retrieve tasks.</param>
+        /// <returns>The task result contains a list of tasks belonging to the
+        /// specified workspace. The list is empty if no tasks are found.</returns>
+        public static async Task<List<Tasks>> GetTasksByWorkspaceId(int workspaceId)
+        {
+            var list = new List<Tasks>();
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = new SqlCommand(SchemaMapping.StoredProcedureNames[SchemaMapping.StoredProcedures.GetWorkspaceTasks], connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("workspaceID", workspaceId);
+            await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            while (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                var task = new Tasks
+                {
+                    TaskId = GetInt(reader, "TaskID"),
+                    ParentGroupId = GetInt(reader, "GroupID"),
+                    ParentWorkspaceId = GetInt(reader, "WorkspaceID"),
+                    Status = (Schema.WorkingItems.TaskStatus)GetInt(reader, "TaskStatus"),
+                    Description = GetString(reader, "TaskContents"),
+                    Title = GetString(reader, "TaskName")
+                };
+                list.Add(task);
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Retrieves all workspaces that belong to the specified group identifier.
+        /// </summary>
+        /// <param name="groupId">The ID of the group whose workspaces are being requested.</param>
+        /// <returns>Returns a list of workspace objects tied to the group. The list is empty if none are found.</returns>
+        public static async Task<List<Workspace>> GetWorkspacesByGroupId(int groupId)
+        {
+            var list = new List<Workspace>();
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = new SqlCommand(SchemaMapping.StoredProcedureNames[SchemaMapping.StoredProcedures.GetGroupWorkspaces], connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("groupID", groupId);
+            await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            while (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                var ws = new Workspace
+                {
+                    WorkspaceId = GetInt(reader, "WorkspaceID"),
+                    ParentGroupId = GetInt(reader, "GroupID"),
+                    Name = GetString(reader, "Name"),
+                    Description = GetString(reader, "Description")
+                };
+                list.Add(ws);
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Pulls the list of groups associated with the given user identifier.
+        /// </summary>
+        /// <param name="userId">The ID of the user for whom group membership/ownership is being fetched.</param>
+        /// <returns>Returns a list of group records for the user. Empty list if user is not in any groups.</returns>
+        public static async Task<List<Group>> GetGroupsByUserId(int userId)
+        {
+            var list = new List<Group>();
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = new SqlCommand(SchemaMapping.StoredProcedureNames[SchemaMapping.StoredProcedures.GetUserGroups], connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("userID", userId);
+            await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            while (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                var g = new Group
+                {
+                    GroupId = GetInt(reader, "ID"),
+                    Name = GetString(reader, "Name"),
+                    Description = GetString(reader, "Description"),
+                    OwnerId = GetInt(reader, "OwnerID")
+                };
+                list.Add(g);
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Retrieves workspaces that are linked to the specified user identifier (ownership or association as returned by the proc).
+        /// </summary>
+        /// <param name="userId">The ID of the user whose workspaces are requested.</param>
+        /// <returns>Returns a list of workspace objects. Empty list if no workspaces match.</returns>
+        public static async Task<List<Workspace>> GetWorkspacesByUserId(int userId)
+        {
+            var list = new List<Workspace>();
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = new SqlCommand(SchemaMapping.StoredProcedureNames[SchemaMapping.StoredProcedures.GetUserWorkspaces], connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("userID", userId);
+            await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            while (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                var ws = new Workspace
+                {
+                    WorkspaceId = GetInt(reader, "WorkspaceID"),
+                    ParentGroupId = GetInt(reader, "GroupID"),
+                    Name = GetString(reader, "Name"),
+                    Description = GetString(reader, "Description")
+                };
+                list.Add(ws);
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Gets workspaces where the specified user is a member (membership context rather than pure ownership).
+        /// </summary>
+        /// <param name="userId">The ID of the user whose workspace memberships are requested.</param>
+        /// <returns>A list of workspace objects representing membership. Empty if none.</returns>
+        public static async Task<List<Workspace>> GetWorkspaceMembershipsByUserId(int userId)
+        {
+            var list = new List<Workspace>();
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = new SqlCommand(SchemaMapping.StoredProcedureNames[SchemaMapping.StoredProcedures.GetUserWorkspaceMemberships], connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("userID", userId);
+            await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            while (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                var ws = new Workspace
+                {
+                    WorkspaceId = GetInt(reader, "WorkspaceID"),
+                    ParentGroupId = GetInt(reader, "GroupID"),
+                    Name = GetString(reader, "Name"),
+                    Description = GetString(reader, "Description")
+                };
+                list.Add(ws);
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Fetches child tasks that are directly associated with a given parent task identifier.
+        /// </summary>
+        /// <param name="taskId">The parent task ID whose child tasks are being queried.</param>
+        /// <returns>A list of task objects representing the children. Empty if there are no child tasks.</returns>
+        public static async Task<List<Tasks>> GetChildTasksByTaskId(int taskId)
+        {
+            var list = new List<Tasks>();
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = new SqlCommand(SchemaMapping.StoredProcedureNames[SchemaMapping.StoredProcedures.GetChildTasksByTaskId], connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("taskId", taskId);
+            await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            while (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                var task = new Tasks
+                {
+                    TaskId = GetInt(reader, "ID"),
+                    Status = (Schema.WorkingItems.TaskStatus)GetInt(reader, "TaskStatus"),
+                    Description = GetString(reader, "Contents"),
+                    Title = GetString(reader, "Name"),
+                    IsChildTask = true,
+                    ParentTaskId = taskId
+                };
+                list.Add(task);
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Retrieves message objects (comments or chat messages) tied to an owner and narrowed by a message type.
+        /// </summary>
+        /// <param name="ownerId">The owning entity/user identifier used by the stored procedure.</param>
+        /// <param name="type">The message type discriminator (e.g. 1 = TaskComment, 2 = WorkspaceChatMessage).</param>
+        /// <returns>Returns a list of IMessage implementations. Empty list if nothing matches the criteria.</returns>
+        public static async Task<List<IMessage>> GetMessagesByOwnerAndType(int ownerId, int type)
+        {
+            var list = new List<IMessage>();
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = new SqlCommand(SchemaMapping.StoredProcedureNames[SchemaMapping.StoredProcedures.GetMessagesByOwnerAndType], connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("ownerId", ownerId);
+            command.Parameters.AddWithValue("type", type);
+            await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            while (await reader.ReadAsync().ConfigureAwait(false))
+            {
+                // Assumed column names; adjust if needed.
+                var id = GetInt(reader, "ID");
+                var content = GetString(reader, "Content");
+                var created = GetDateTime(reader, "CreatedAt");
+                if (type == (int)MessageType.TaskComment)
+                {
+                    var taskId = GetInt(reader, "TaskId");
+                    list.Add(new TaskComment(id, ownerId, taskId, created, content));
+                }
+                else if (type == (int)MessageType.WorkspaceChatMessage)
+                {
+                    var workspaceId = GetInt(reader, "WorkspaceId");
+                    list.Add(new WorkspaceChatMessage(id, ownerId, workspaceId, created, content));
+                } else
+                {
+                    throw new Exception($"Unknown message type paramter when getting messages: {type}");
+                }
+            }
+            return list;
+        }
+
+        // reader helpers
+        private static int GetInt(SqlDataReader r, string name)
+        {
+            try { var ord = r.GetOrdinal(name); return r.IsDBNull(ord) ? 0 : Convert.ToInt32(r.GetValue(ord)); } catch { return 0; }
+        }
+        private static string GetString(SqlDataReader r, string name)
+        {
+            try { var ord = r.GetOrdinal(name); return r.IsDBNull(ord) ? string.Empty : r.GetString(ord); } catch { return string.Empty; }
+        }
+        private static DateTime GetDateTime(SqlDataReader r, string name)
+        {
+            try { var ord = r.GetOrdinal(name); return r.IsDBNull(ord) ? DateTime.UtcNow : Convert.ToDateTime(r.GetValue(ord)); } catch { return DateTime.UtcNow; }
         }
 
     }

@@ -4,7 +4,7 @@ namespace TaskHub.Schema.WorkingItems
 {
     public class Group : IOwner
     {
-        public string GroupId { get; set; }
+        public int GroupId { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
         public List<int> MemberUserIds { get; set; }
