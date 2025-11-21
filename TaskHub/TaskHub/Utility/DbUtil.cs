@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using TaskHub.Schema;
+using TaskHub.Schema.WorkingItems;
 
 namespace TaskHub.Utility
 {
@@ -30,6 +31,77 @@ namespace TaskHub.Utility
             {
                 throw new InvalidOperationException("Unable to connect to TaskHubDb the connection string.", ex);
             }
+        }
+
+        private static async Task<Tasks> GetTaskWithTaskId(int taskId)
+        {
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = new SqlCommand("");
+            command.Parameters.AddWithValue("TaskId", taskId);
+            using(SqlDataReader datareader = command.ExecuteReader())
+            {
+                if (datareader.HasRows)
+                {
+                    Tasks task = new Tasks();
+                    while (datareader.Read())
+                    {
+                        // Map datareader columns to task properties
+                        task.TaskId = datareader.GetInt32(0);
+                        task.ParentGroupId = datareader.GetInt32(1);
+                        task.ParentWorkspaceId = datareader.GetInt32(2);
+                        task.Status = (Schema.WorkingItems.TaskStatus)datareader.GetInt32(4);
+                        task.Description = datareader.GetString(5);
+                        task.Title = datareader.GetString(6);
+                    }
+                    return task;
+                }
+            }
+            return null;
+        }
+
+        public static async Task<List<Tasks>> GetListTaskWithUserId(int userId)
+        {
+            List<int> taskIds = new List<int>();
+
+            List<Tasks> list = new List<Tasks>();
+
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+
+            await using var command = new SqlCommand(StoredProcedureNames[StoredProcedures.GetUserTasks], connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            }; // set command to name of stored procedure, mark as stored procedure prior to executing
+
+            // pass user Id as param to SQL command
+            command.Parameters.AddWithValue("UserId", userId);
+
+            using(SqlDataReader datareader = command.ExecuteReader())
+            {
+                if (datareader.HasRows)
+                {
+                    while(datareader.Read())
+                    {
+                        taskIds.Add(datareader.GetInt32(0)); // assuming TaskID is the first column
+                    }
+                }
+            }
+
+            if(taskIds.Count > 0)
+            {
+                // Run sequential logic to get the actual individual task via the TaskId
+                foreach(int id in taskIds)
+                {
+                    Tasks task = await GetTaskWithTaskId(id);
+                    if (task != null)
+                    {
+                        list.Add(task);
+                    }
+                }
+            }
+
+            return list;
         }
 
 

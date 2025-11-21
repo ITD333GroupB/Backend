@@ -1,4 +1,6 @@
+global using static TaskHub.Schema.SchemaMapping;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -6,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using TaskHub.Schema;
+using TaskHub.Schema.WorkingItems;
 using TaskHub.Security;
 using TaskHub.Utility;
 
@@ -64,6 +67,33 @@ namespace TaskHub
             var app = builder.Build();
             
             DbUtil.Initialize(app.Configuration);
+
+            app.MapPut(ApiEndpointNames[ApiEndpoints.GetUserTasks], async Task<IResult> (HttpContext context) =>
+            {
+                // read the PUT 
+                using var reader = new StreamReader(context.Request.Body);
+                string bodyJson = await reader.ReadToEndAsync();
+
+                var userId = context.Request.RouteValues["userId"]; // get userId from the query parameter
+
+                // check to make sure user Id is a valid integer
+                if(Int32.TryParse(userId?.ToString(), out int userIdInt) == false)
+                {
+                    return Results.BadRequest("Invalid userId parameter.");
+                }
+
+                var tasks = await DbUtil.GetListTaskWithUserId(userIdInt);
+
+                var taskout = JsonSerializer.Serialize<List<Tasks>>(tasks);
+
+                // null check - if is null then throw bad request error
+                if(taskout == null)
+                {
+                    return Results.BadRequest("No tasks found for the given userId.");
+                }
+
+                return Results.Content(taskout);
+            }).RequireAuthorization();
 
             app.UseDefaultFiles(); // Serves index.html by default
             app.UseStaticFiles();
