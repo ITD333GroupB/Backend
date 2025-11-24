@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using TaskHub.Schema;
+using TaskHub.Schema.Users;
 using TaskHub.Schema.WorkingItems;
 using TaskHub.Security;
 using TaskHub.Utility;
@@ -322,6 +323,118 @@ namespace TaskHub
 
                 return Results.Content(json);
             }).RequireAuthorization();
+
+            ///<summary>
+            /// This endpoint registers a new user. Returns a UserProfile JSON with JWT if successful.
+            /// </summary>
+            app.MapPost(ApiEndpointNames[ApiEndpoints.RegisterUser], async (HttpContext context) =>
+            {
+                using var bodyReader = new StreamReader(context.Request.Body);
+                string bodyJson = await bodyReader.ReadToEndAsync();
+
+                if (string.IsNullOrWhiteSpace(bodyJson))
+                    return Results.BadRequest("Empty request body.");
+
+                AccountRegistrationRequest? req;
+                try
+                {
+                    req = JsonSerializer.Deserialize<AccountRegistrationRequest>(bodyJson);
+                }
+                catch
+                {
+                    return Results.BadRequest("Invalid JSON format.");
+                }
+
+                if (req == null)
+                    return Results.BadRequest("Missing registration payload.");
+
+                if (string.IsNullOrWhiteSpace(req.Username))
+                    return Results.BadRequest("Username is required.");
+                if (string.IsNullOrWhiteSpace(req.Password))
+                    return Results.BadRequest("Password is required.");
+
+                // ensure date set (make it easier if setting date from FE JS is causing headache - then leave it blank when passing to endpoint)
+                var effectiveCreated = req.AccountCreated == default ? DateTime.UtcNow : req.AccountCreated;
+                // call db helper
+                var reg = await DbUtil.RegisterUser(req.Username, req.Password, req.Email, effectiveCreated);
+
+                if (reg == null)
+                    return Results.BadRequest("Registration failed.");
+
+                if (reg.ResultCode <= 0)
+                    return Results.Conflict("Username already in use.");
+
+                if (string.IsNullOrWhiteSpace(reg.UserId))
+                    return Results.BadRequest("Invalid user identifier returned.");
+
+                // make JWT
+                var tokenService = context.RequestServices.GetRequiredService<IJwtTokenService>();
+                var token = tokenService.GenerateToken(reg.UserId, req.Username, req.Email);
+
+                var profile = new UserProfile
+                {
+                    Username = req.Username,
+                    UserID = reg.UserId,
+                    Email = req.Email,
+                    JwtToken = token,
+                    AccountCreated = reg.AccountCreated
+                };
+
+                var json = JsonSerializer.Serialize(profile);
+                if (json == null)
+                    return Results.BadRequest("Serialization failed.");
+
+                return Results.Content(json);
+            });
+
+            ///<summary>
+            /// This endpoint logs a user in. Returns a LoginResponse (JWT inside if success).
+            /// </summary>
+            app.MapPost(ApiEndpointNames[ApiEndpoints.AuthenticateUser], async (HttpContext context) =>
+            {
+                using var bodyReader = new StreamReader(context.Request.Body);
+                string bodyJson = await bodyReader.ReadToEndAsync();
+
+                if (string.IsNullOrWhiteSpace(bodyJson))
+                    return Results.BadRequest("Empty request body.");
+
+                AccountLoginRequest? req;
+                try
+                {
+                    req = JsonSerializer.Deserialize<AccountLoginRequest>(bodyJson);
+                }
+                catch
+                {
+                    return Results.BadRequest("Invalid JSON format.");
+                }
+
+                if (req == null)
+                    return Results.BadRequest("Missing login payload.");
+
+                if (string.IsNullOrWhiteSpace(req.Username))
+                    return Results.BadRequest("Username is required.");
+                if (string.IsNullOrWhiteSpace(req.Password))
+                    return Results.BadRequest("Password is required.");
+
+                var auth = await DbUtil.AuthenticateUser(req.Username, req.Password);
+                if (auth == null)
+                    return Results.Unauthorized();
+
+                var tokenService = context.RequestServices.GetRequiredService<IJwtTokenService>();
+                var token = tokenService.GenerateToken(auth.UserId, auth.Username, auth.Email);
+
+                var response = new LoginResponse
+                {
+                    Success = true,
+                    Token = token
+                };
+
+                var json = JsonSerializer.Serialize(response);
+                if (json == null)
+                    return Results.BadRequest("Serialization failed.");
+
+                return Results.Content(json);
+            });
 
             app.UseDefaultFiles(); // Serves index.html by default
             app.UseStaticFiles();

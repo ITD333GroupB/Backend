@@ -465,6 +465,68 @@ namespace TaskHub.Utility
             return list;
         }
 
+        // lightweight result records for auth / registration
+        public sealed record RegistrationResult(int ResultCode, string UserId, DateTime AccountCreated);
+        public sealed record AuthenticationResult(string UserId, string Username, string Email);
+
+        /// <summary>
+        /// Registers a user via stored procedure. Returns null if proc returns no rows.
+        /// </summary>
+        public static async Task<RegistrationResult?> RegisterUser(string username, string password, string email, DateTime accountCreated)
+        {
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = new SqlCommand(SchemaMapping.StoredProcedureNames[SchemaMapping.StoredProcedures.RegisterUser], connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("Username", username);
+            command.Parameters.AddWithValue("Password", password);
+            command.Parameters.AddWithValue("Email", email);
+            command.Parameters.AddWithValue("AccountCreated", accountCreated);
+
+            await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            if (!await reader.ReadAsync().ConfigureAwait(false))
+                return null;
+
+            var resultCode = GetInt(reader, "Result");
+            var userId = GetString(reader, "UserID");
+            var created = GetDateTime(reader, "AccountCreated");
+
+            return new RegistrationResult(resultCode, userId, created);
+        }
+
+        /// <summary>
+        /// Authenticates a user via stored procedure. Returns null if credentials invalid.
+        /// </summary>
+        public static async Task<AuthenticationResult?> AuthenticateUser(string username, string password)
+        {
+            await using var connection = new SqlConnection(ConnectionString);
+            await connection.OpenAsync().ConfigureAwait(false);
+            await using var command = new SqlCommand(SchemaMapping.StoredProcedureNames[SchemaMapping.StoredProcedures.AuthenticateUser], connection)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("Username", username);
+            command.Parameters.AddWithValue("Password", password);
+
+            await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+            if (!await reader.ReadAsync().ConfigureAwait(false))
+                return null;
+
+            var userId = GetString(reader, "ID");
+            if (string.IsNullOrWhiteSpace(userId))
+                return null;
+
+            var resolvedUsername = GetString(reader, "Username");
+            if (string.IsNullOrWhiteSpace(resolvedUsername))
+                resolvedUsername = username;
+
+            var email = GetString(reader, "Email");
+
+            return new AuthenticationResult(userId, resolvedUsername, email);
+        }
+
         // reader helpers
         private static int GetInt(SqlDataReader r, string name)
         {
